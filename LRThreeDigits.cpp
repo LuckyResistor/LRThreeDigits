@@ -46,9 +46,9 @@ const uint8_t cDigitCount = 3;
 /// The bits on the ports to drive the digit sinks.
 ///
 const uint16_t cDigitPortBit[cDigitCount] = {
-    0b0000000000000100, // d1
-    0b0000000000001000, // d2
     0b0000000000010000, // d3
+    0b0000000000001000, // d2
+    0b0000000000000100, // d1
 };
 
 /// The number of segments for each digit.
@@ -57,25 +57,22 @@ const uint8_t cSegmentCount = 7;
 
 /// The bits on the ports to drive each segment.
 ///
-/// The segments of the display are enumerated in 
-/// reverse as shown in the illustration below:
-///
 /// ```
-/// .-3-.
-/// 4   2
-/// :-0-:
-/// 5   1
-/// .-6-.
+/// .-0-.  .-a-.
+/// 5   1  f   b
+/// :-6-:  :-g-:
+/// 4   2  e   c
+/// .-3-.  .-d-.
 /// ```
 ///
 const uint16_t cSegmentPortBit[cSegmentCount] = {
-    0b0000000000100000, // g
-    0b0000000001000000, // f
-    0b0000000010000000, // e
-    0b0000000100000000, // d
-    0b0000001000000000, // c
-    0b0000010000000000, // b
     0b0000100000000000, // a
+    0b0000010000000000, // b
+    0b0000001000000000, // c
+    0b0000000100000000, // d
+    0b0000000010000000, // e
+    0b0000000001000000, // f
+    0b0000000000100000, // g
 };
 
 /// The mask for all segment bits for the ports.
@@ -86,6 +83,11 @@ const uint16_t cSegmentMask = 0b0000111111100000;
 ///
 const uint16_t cOutputMask = 0b0000111111111100;
 
+/// Bit flip array to rotate a digit.
+///
+const uint8_t cSegmentRotateMap[cSegmentCount] = {
+    3, 4, 5, 0, 1, 2, 6  
+};
 
 /// Structure to define the mask for one digit.
 ///
@@ -104,34 +106,37 @@ struct DigitMask {
 /// ends with a `\0` zero character entry.
 ///
 const DigitMask cDigitMask[] = {
-    {'0',  0b01111110},
-    {'1',  0b00000110},
-    {'2',  0b01101101},
-    {'3',  0b01001111},
-    {'4',  0b00010111},
-    {'5',  0b01011011},
-    {'6',  0b01111011},
-    {'7',  0b00001110},
-    {'8',  0b01111111},
-    {'9',  0b01011111},
-    {'a',  0b00111111},
-    {'b',  0b01110011},
-    {'c',  0b01100001},
-    {'d',  0b01100111},
-    {'e',  0b01111001},
-    {'f',  0b00111001},
-    {'_',  0b01000000},
-    {'*',  0b00011101}, // degree symbol
-    {'\'', 0b00010000},
-    {'"',  0b00010100},
-    {' ',  0b00000000},
-    {'\0', 0b00000000}
+    {'0',  0x3f},
+    {'1',  0x06},
+    {'2',  0x5b},
+    {'3',  0x4f},
+    {'4',  0x66},
+    {'5',  0x6d},
+    {'6',  0x7d},
+    {'7',  0x07},
+    {'8',  0x7f},
+    {'9',  0x6f},
+    {'a',  0x77},
+    {'b',  0x7c},
+    {'c',  0x39},
+    {'d',  0x5e},
+    {'e',  0x79},
+    {'f',  0x71},
+    {'_',  0x08},
+    {'*',  0x63}, // degree symbol
+    {'\'', 0x20},
+    {'"',  0x0a},
+    {' ',  0x00},
+    {'\0', 0x00}
 };
 
 
 // Variables
 // ---------------------------------------------------------------------------
 
+/// The orientation of the display.
+///
+Orientation gOrientation = Orientation::ConnectorOnTop;
 
 /// The current lighten digit index.
 ///
@@ -213,28 +218,59 @@ uint8_t getDigitMask(char c)
 
 /// Convert the digit mask into the actual port mask.
 ///
-/// @param digitMask The abstract mask for the digits to display.
+/// @param segmentMask The abstract mask for the digits to display.
 /// @return The port mask for the pin bits to enable.
 ///
-uint16_t getPortBitsFromDigitMask(uint8_t digitMask)
+uint16_t getPortBitsFromSegmentMask(uint8_t segmentMask)
 {
     uint16_t portBits = 0;
     for (uint8_t i = 0; i < cSegmentCount; ++i) {
-        if ((digitMask & 0b1) != 0) {
-            portBits |= cSegmentPortBit[i];
+        uint8_t targetSegmentIndex;
+        if (gOrientation == Orientation::ConnectorOnTop) {
+            targetSegmentIndex = i;
+        } else {
+            targetSegmentIndex = cSegmentRotateMap[i];
         }
-        digitMask >>= 1;
+        if ((segmentMask & 0b1) != 0) {
+            portBits |= cSegmentPortBit[targetSegmentIndex];
+        }
+        segmentMask >>= 1;
     }
     return portBits;
+}
+
+/// Update the port bits.
+///
+/// @param portBits Array with the port bits to display.
+///
+void updatePortBits(uint16_t *portBits)
+{
+    cli();
+    if (gOrientation == Orientation::ConnectorOnTop) {
+        for (uint8_t i = 0; i < cDigitCount; ++i) {
+            gDigitOutputMask[i] = portBits[i];
+            gDigitOutputMask[i] |= cDigitPortBit[i];
+        }
+    } else {
+        for (uint8_t i = 0; i < cDigitCount; ++i) {
+            const uint8_t sourceIndex = cDigitCount-i-1;
+            gDigitOutputMask[i] = portBits[sourceIndex];
+            gDigitOutputMask[i] |= cDigitPortBit[i];
+        }
+    }      
+    sei();
 }
 
 
 // Interface Implementation
 // ---------------------------------------------------------------------------
 
-
-void initialize(Frequency frequency)
+void initialize(
+    Frequency frequency,
+    Orientation orientation)
 {
+    // Store the orientation.
+    gOrientation = orientation;
     // Initialize the ports. Set all used pins to output and into low state.
     DDRD |= getPortDMask(cOutputMask);
     DDRB |= getPortBMask(cOutputMask);
@@ -260,6 +296,12 @@ void initialize(Frequency frequency)
 }
 
 
+void setOrientation(Orientation orientation)
+{
+    gOrientation = orientation;
+}
+
+
 void setDigits(const char *text)
 {
     // Check if we got a pointer to text.
@@ -269,20 +311,29 @@ void setDigits(const char *text)
     // Calculate the new bit masks for the ports.
     uint16_t portBits[cDigitCount];
     for (uint8_t i = 0; i < cDigitCount; ++i) {
-        portBits[i] = cDigitPortBit[i];
-    }
+        portBits[i] = 0;
+    }    
     for (uint8_t i = 0; i < cDigitCount; ++i) {
         if (text[i] == '\0') {
             break;
         }
-        portBits[i] |= getPortBitsFromDigitMask(getDigitMask(text[i]));
+        const uint8_t segmentMask = getDigitMask(text[i]);
+        portBits[i] = getPortBitsFromSegmentMask(segmentMask);
     }
     // Update the output masks for the display.
-    cli();
+    updatePortBits(portBits);
+}
+
+
+void setSegments(const uint8_t *segmentMasks)
+{
+    uint16_t portBits[cDigitCount];
     for (uint8_t i = 0; i < cDigitCount; ++i) {
-        gDigitOutputMask[i] = portBits[i];
-    }
-    sei();
+        const uint8_t segmentMask = segmentMasks[i];
+        portBits[i] = getPortBitsFromSegmentMask(segmentMask);
+    }        
+    // Update the output masks for the display.
+    updatePortBits(portBits);
 }
 
   

@@ -23,20 +23,25 @@
 #include <LRThreeDigits.h>
 
 
+namespace ltd = lr::ThreeDigits;
+
+
 void setup() {
-  // Initialize the driver.
-  lr::ThreeDigits::initialize();
+    // Initialize the driver.
+    ltd::initialize(
+        ltd::Frequency::Normal,
+        ltd::Orientation::ConnectorOnTop);
 }
 
 
 void loop() {
-  // Count from 0 to 999 and repeat.
-  char buffer[10];
-  for (uint16_t i = 0; i < 1000; ++i) {
-    sprintf(buffer, "%3d", i);
-    lr::ThreeDigits::setDigits(buffer);
-    delay(100);
-  }
+    // Count from 0 to 999 and repeat.
+    char buffer[10];
+    for (uint16_t i = 0; i < 1000; ++i) {
+        sprintf(buffer, "%3d", i);
+        ltd::setDigits(buffer);
+        delay(100);
+    }
 }
 
 

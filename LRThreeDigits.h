@@ -78,16 +78,35 @@ enum class Frequency : uint8_t {
     Insane = 0x0, /// ~40 kHz - If your MCU is dedicated for just this display.
 };
 
+/// The orientation of the display.
+///
+enum class Orientation : uint8_t {
+    ConnectorOnTop, ///< The connector of the display is at the top side.
+    ConnectorOnBottom ///< The connector of the display is at the bottom side.
+};
+
 
 /// Initialize the driver.
 ///
-/// This will initialize the driver and start the interrupt to 
+/// This will initialise the driver and start the interrupt to 
 /// refresh the display. Initially, the display is blank, until
 /// you call `setDigits` with some text.
 ///
 /// @param frequency The multiplexer frequency.
 ///
-void initialize(Frequency frequency = Frequency::Normal);
+void initialize(
+    Frequency frequency = Frequency::Normal,
+    Orientation orientation = Orientation::ConnectorOnTop);
+
+/// Set the orientation of the display.
+///
+/// Usually you just keep the orientation setting from the 
+/// `initialize` method. You can change it later using this
+/// method. Changing the orientation will not affect the 
+/// currently displayed content. To actually flip the content
+/// you have to call `setDigits()` or `setSegments()`.
+///
+void setOrientation(Orientation orientation);
 
 /// Set the text for the digits.
 ///
@@ -97,6 +116,24 @@ void initialize(Frequency frequency = Frequency::Normal);
 /// on the display. 
 ///
 void setDigits(const char *text);
+
+/// Set the segments manually for a digit.
+///
+/// The segments and the corresponding bits are shown in the
+/// illustration below:
+///
+/// ```
+/// .-0-.  .-a-.
+/// 5   1  f   b
+/// :-6-:  :-g-:
+/// 4   2  e   c
+/// .-3-.  .-d-.
+/// ```
+///
+/// @param segmentMasks The segment masks for all digits
+///   of the display from left to right.
+///
+void setSegments(const uint8_t *segmentMasks);
 
 
 }
