@@ -30,7 +30,8 @@ void setup() {
     // Initialize the driver.
     ltd::initialize(
         ltd::Frequency::Normal,
-        ltd::Orientation::ConnectorOnTop);
+        ltd::Orientation::ConnectorOnTop,
+        ltd::Pins::From2to11);
 }
 
 

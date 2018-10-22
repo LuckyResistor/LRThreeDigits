@@ -44,11 +44,11 @@
 /// | Pin 11       | Segment a         |
 ///
 /// Basically sequentially connect the pins from the Arduino board,
-/// starting with Pin 2 to the display. Except the GND, which is 
+/// starting with Pin 2 to the display. Except the GND, which is
 /// not in sequence.
 ///
 /// Please note: This driver shall just provide a well designed example
-/// how to drive this kind of display. Most likely you will have to 
+/// how to drive this kind of display. Most likely you will have to
 /// adapt the driver for your particular use case.
 ///
 
@@ -62,7 +62,7 @@ namespace ThreeDigits {
 /// Faster frequencies will reduce the visible flickering of the
 /// display, but will use more overall CPU time.
 ///
-/// The written frequency is calculated using the ATmega328P 
+/// The written frequency is calculated using the ATmega328P
 /// running at 16 MHz. The frequency is for a whole display with.
 /// 3 digits. Each digit is lighten up equally in this time.
 /// In other words, e.g. the first digit is displayed every 1/f seconds.
@@ -73,7 +73,7 @@ enum class Frequency : uint8_t {
     Slow = 0x5, /// ~163 Hz - Flickering not visible for humans.
     Normal = 0x4, /// ~325 Hz - Good reasonable compromise.
     Fast = 0x3, /// ~650 Hz - Fast refresh with almost no inference.
-    Faster = 0x2, /// ~2.6 kHz - Very fast 
+    Faster = 0x2, /// ~2.6 kHz - Very fast
     VeryFast = 0x1, /// ~20 kHz - A perfect display quality.
     Insane = 0x0, /// ~40 kHz - If your MCU is dedicated for just this display.
 };
@@ -85,10 +85,16 @@ enum class Orientation : uint8_t {
     ConnectorOnBottom ///< The connector of the display is at the bottom side.
 };
 
+/// The pin connection options.
+///
+enum class Pins : uint8_t {
+    From2to11, ///< connector plugged into pins 2-11 (default)
+    From4to13  ///< connector plugged into pins 4-13
+};
 
 /// Initialize the driver.
 ///
-/// This will initialise the driver and start the interrupt to 
+/// This will initialise the driver and start the interrupt to
 /// refresh the display. Initially, the display is blank, until
 /// you call `setDigits` with some text.
 ///
@@ -96,13 +102,14 @@ enum class Orientation : uint8_t {
 ///
 void initialize(
     Frequency frequency = Frequency::Normal,
-    Orientation orientation = Orientation::ConnectorOnTop);
+    Orientation orientation = Orientation::ConnectorOnTop,
+    Pins pins = Pins::From2to11);
 
 /// Set the orientation of the display.
 ///
-/// Usually you just keep the orientation setting from the 
+/// Usually you just keep the orientation setting from the
 /// `initialize` method. You can change it later using this
-/// method. Changing the orientation will not affect the 
+/// method. Changing the orientation will not affect the
 /// currently displayed content. To actually flip the content
 /// you have to call `setDigits()` or `setSegments()`.
 ///
@@ -111,9 +118,9 @@ void setOrientation(Orientation orientation);
 /// Set the text for the digits.
 ///
 /// Pass a string with one or more characters to this function
-/// to display them. A string shorter than the number of 
+/// to display them. A string shorter than the number of
 /// digits on the display, the text is displayed left aligned
-/// on the display. 
+/// on the display.
 ///
 void setDigits(const char *text);
 
