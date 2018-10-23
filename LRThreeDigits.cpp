@@ -40,15 +40,14 @@ namespace ThreeDigits {
 // The masks and variables are all 0-based, with significant bits
 // starting from bit 0.
 //
-// Data is only shifted into correct bit position at the point
-// of updating the port register, after which the lower byte
+// Data is shifted into correct bit position at the point
+// of setting the digits to display, after which the lower byte
 // will be written to port D and the upper byte to port B.
 //
 
-
-/// The mask for all bits used.
+/// The mask for all significant bits used on ports.
 ///
-const uint16_t cPortBitMask = 0b0000001111111111;
+const uint16_t cPrePortBitMask = 0b0000001111111111;
 
 /// The number of digits of the display.
 ///
@@ -137,19 +136,26 @@ const DigitMask cDigitMask[] = {
 // Variables
 // ---------------------------------------------------------------------------
 
-/// The number of lower unused pins in PORTD.
-///
-uint8_t gPortBitOffset = 2;
 
 /// The orientation of the display.
 ///
 Orientation gOrientation = Orientation::ConnectorOnTop;
+
+/// The mask for all bits used on ports.
+/// This is recalculated when changing gPortBitOffset.
+///
+uint16_t gPortBitMask = 0b0000111111111100;
+
+/// The number of lower unused pins in PORTD.
+///
+uint8_t gPortBitOffset = 2;
 
 /// The current lighten digit index.
 ///
 uint8_t gCurrentDigitIndex = 0;
 
 /// The pre-calculated register masks for all digits.
+/// This includes being shifted into correct port bit position.
 ///
 volatile uint16_t gDigitOutputMask[cDigitCount] = {
     cDigitPortBit[0],
@@ -164,12 +170,15 @@ volatile uint16_t gDigitOutputMask[cDigitCount] = {
 
 /// Get the port D mask part from the combined mask.
 ///
+/// This `constexpr` will allow the compiler to resolve this function call
+/// into the optimized code.
+///
 /// @param mask The combined mask.
 /// @return The mask for port D.
 ///
-uint8_t getPortDMask(const uint16_t mask)
+constexpr uint8_t getPortDMask(const uint16_t mask)
 {
-    return static_cast<uint8_t>(mask << gPortBitOffset & 0x00ffu);
+    return static_cast<uint8_t>(mask & 0x00ffu);
 }
 
 /// Get the port B mask part from the combined mask.
@@ -177,9 +186,9 @@ uint8_t getPortDMask(const uint16_t mask)
 /// @param mask The combined mask.
 /// @return The mask for port B.
 ///
-uint8_t getPortBMask(const uint16_t mask)
+constexpr uint8_t getPortBMask(const uint16_t mask)
 {
-    return static_cast<uint8_t>(mask >> (8 - gPortBitOffset));
+    return static_cast<uint8_t>(mask >> 8);
 }
 
 /// Update the ports to light up the next digit.
@@ -191,8 +200,8 @@ void updatePorts()
 {
     uint8_t portD = PORTD;
     uint8_t portB = PORTB;
-    portD &= ~getPortDMask(cPortBitMask);
-    portB &= ~getPortBMask(cPortBitMask);
+    portD &= ~getPortDMask(gPortBitMask);
+    portB &= ~getPortBMask(gPortBitMask);
     portD |= getPortDMask(gDigitOutputMask[gCurrentDigitIndex]);
     portB |= getPortBMask(gDigitOutputMask[gCurrentDigitIndex]);
     PORTD = portD;
@@ -249,17 +258,20 @@ uint16_t getPortBitsFromSegmentMask(uint8_t segmentMask)
 ///
 void updatePortBits(uint16_t *portBits)
 {
+    uint16_t digitOutputMask;
     cli();
     if (gOrientation == Orientation::ConnectorOnTop) {
         for (uint8_t i = 0; i < cDigitCount; ++i) {
-            gDigitOutputMask[i] = portBits[i];
-            gDigitOutputMask[i] |= cDigitPortBit[i];
+            digitOutputMask = portBits[i];
+            digitOutputMask |= cDigitPortBit[i];
+            gDigitOutputMask[i] = digitOutputMask << gPortBitOffset;
         }
     } else {
         for (uint8_t i = 0; i < cDigitCount; ++i) {
             const uint8_t sourceIndex = cDigitCount-i-1;
-            gDigitOutputMask[i] = portBits[sourceIndex];
-            gDigitOutputMask[i] |= cDigitPortBit[i];
+            digitOutputMask = portBits[sourceIndex];
+            digitOutputMask |= cDigitPortBit[i];
+            gDigitOutputMask[i] = digitOutputMask << gPortBitOffset;
         }
     }
     sei();
@@ -277,14 +289,18 @@ void initialize(
     // Store the orientation.
     gOrientation = orientation;
     // Resolve and save the pin offset.
-    if(pins == Pins::From2to11) gPortBitOffset = 2;
-    else gPortBitOffset = 4;
-
+    if (pins == Pins::From2to11) {
+        gPortBitOffset = 2;
+    } else {
+        gPortBitOffset = 4;
+    }
+    // Pre-calculate the port bit mask.
+    gPortBitMask = cPrePortBitMask << gPortBitOffset;
     // Initialize the ports. Set all used pins to output and into low state.
-    DDRD |= getPortDMask(cPortBitMask);
-    DDRB |= getPortBMask(cPortBitMask);
-    PORTD &= ~getPortDMask(cPortBitMask);
-    PORTB &= ~getPortBMask(cPortBitMask);
+    DDRD |= getPortDMask(gPortBitMask);
+    DDRB |= getPortBMask(gPortBitMask);
+    PORTD &= ~getPortDMask(gPortBitMask);
+    PORTB &= ~getPortBMask(gPortBitMask);
     // Initialize timer2 for the display refresh.
     ASSR = 0; // Synchronous internal clock.
     if (frequency != Frequency::Insane) {
